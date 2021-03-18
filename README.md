@@ -49,3 +49,46 @@ pthread_t tid;
 ```
 
 tid只有一个，当多个客户端连接时只有一个客户端会工作
+
+多个client会有竞争
+
+# v4.0
+
+用数组处理多个客户端的竞争问题
+
+一个程序最多能处理的线程是1024
+
+```c
+#define MAXCLIENT 512//一次进程处理最大的线程1024
+
+struct Client{
+    int flag;
+    int fd;
+    pthread_t tid;
+};
+
+struct Client *client;
+
+//寻找最小的可用的客户端下标
+int find_sub(){
+    for(int i = 0; i < MAXCLIENT; i++){
+        if(client[i].flag == 0){
+            return i;
+        }
+    }
+    return -1;
+}
+
+		int sub;
+        if((sub = find_sub()) < 0){
+            fprintf(stderr, "Client Full\n");
+            close(sockfd);
+            continue;
+        }
+        client[sub].flag = 1;
+        client[sub].fd = sockfd;
+        pthread_create(&client[sub].tid, NULL, work, (void *)&sub);
+
+
+```
+
