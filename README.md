@@ -92,3 +92,67 @@ int find_sub(){
 
 ```
 
+# v5.0
+
+使用线程池改进程序
+
+之前的每来一个任务新创建一个线程，类似公司每有一个任务我就重新招聘一个人，用完了踢走，不合理
+
+线程池：来任务了就进任务队列，每个线程认领一个任务，做完任务之后再拿下一个任务，直至全部任务完成
+
+![image-20210326104656056](https://gitee.com/xsm970228/images2020.9.5/raw/master/20210326104658.png)
+
+- 可能会有多个线程抢一个任务：需要做互斥
+- 当有任务来时需要告知所有人：条件变量
+
+任务队列 + 线程池
+
+```c
+//任务队列结构操作和结构定义
+typedef struct{
+    int sum;
+    int *fd;
+    int head, tail;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+} TaskQueue;
+
+void TaskQueueInit(TaskQueue *queue, int sum){
+    queue->sum = sum;
+    queue->fd = calloc(sum, sizeof(int));
+    queue->head = queue->tail = 0;
+    pthread_mutex_init(&queue->mutex, NULL);
+    pthread_cond_init(&queue->cond, NULL);
+}
+
+void TaskQueuePush(TaskQueue *queue, int fd){
+    pthread_mutex_lock(&queue->mutex);
+    queue->fd[queue->tail] = fd;
+    
+    if(++queue->tail == queue->sum) queue->tail = 0;
+    pthread_cond_signal(&queue->cond);
+    pthread_mutex_unlock(&queue->mutex);
+}
+
+int TaskQueuePop(TaskQueue *queue){
+    pthread_mutex_lock(&queue->mutex);
+    while(queue->tail == queue->head){
+        pthread_cond_wait(&queue->cond, &queue->mutex);
+    }
+    int fd = queue->fd[queue->head];
+    if(++queue->head == queue->sum) queue->head = 0;
+    pthread_mutex_unlock(&queue->mutex);
+    return fd;
+}
+
+//主函数在进行死循环accept之前需要建立任务队列和线程池
+TaskQueue queue;
+    TaskQueueInit(&queue, MAXTASK);
+
+    pthread_t *tid = calloc(MAXCLIENT, sizeof(int));
+    for(int i = 0; i < MAXCLIENT; i++){
+        pthread_create(&tid[i], NULL, thread_run, (void *)&queue);
+    }
+//每次accept一个新的连接fd，需要将其压入任务队列
+```
+
